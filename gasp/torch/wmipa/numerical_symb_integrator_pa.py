@@ -343,8 +343,14 @@ class NumericalSymbIntegratorPA(Integrator):
                 atom_assignments, weight, aliases
             )
             if simplices.shape[0] == 0:
-                # this won't work if results is empty but this will hopefully never happen :)
-                results.append(torch.zeros_like(results[-1]))
+                if len(results) == 0:
+                    match self.mode:
+                        case FunctionMode(_, out_shape):
+                            results.append(torch.zeros((*out_shape, 1)))
+                        case WeightedFormulaMode():
+                            results.append(torch.zeros([1, 1]))
+                else:
+                    results.append(torch.zeros_like(results[-1]))
                 continue
             simplices = simplices.to(self.device)
             coeffs = coeffs.to(self.device)
@@ -355,7 +361,11 @@ class NumericalSymbIntegratorPA(Integrator):
             integral_polytope = (
                 torch.sum(integral_simplices, dim=0).to("cpu").unsqueeze(-1)
             )
-            results.append(integral_polytope.item())
+            match self.mode:
+                case FunctionMode(_):
+                    results.append(integral_polytope.to("cpu").unsqueeze(-1))
+                case WeightedFormulaMode():
+                    results.append(integral_polytope.item())
 
         self.sequential_integration_time = time.time() - start_time
         # results = torch.concatenate(results, dim=-1)
