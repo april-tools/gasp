@@ -247,8 +247,14 @@ class NumericalSymbIntegratorPA(Integrator):
                 bounds.append(atom)
 
         return self._make_problem(weight, bounds, aliases)
-
+    
     def integrate_batch(self, problems, *args, **kwargs):  # type: ignore
+        if self.n_workers > 1:
+            return self.integrate_batch_parallel(problems, *args, **kwargs)
+        else:
+            return self.integrate_batch_sequential(problems, *args, **kwargs)
+
+    def integrate_batch_parallel(self, problems, *args, **kwargs):  # type: ignore
         start_time = time.time()
         results = []
 
