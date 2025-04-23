@@ -295,7 +295,7 @@ class NumericalSymbIntegratorPA(Integrator):
                     else:
                         s_size = simplices.shape[0]
                     for i in range(0, simplices.shape[0], s_size):
-                        simplices_batch = simplices[i : i + s_size]
+                        simplices_batch = simplices[i:(i + s_size)]
                         integral_simplices = torch.vmap(
                             lambda s: self.integrate_simplex(s, coeffs, exponents)
                         )(simplices_batch)
@@ -353,14 +353,27 @@ class NumericalSymbIntegratorPA(Integrator):
                     results.append(torch.zeros_like(results[-1]))
                 continue
             simplices = simplices.to(self.device)
-            coeffs = coeffs.to(self.device)
-            exponents = exponents.to(self.device)
-            integral_simplices = torch.vmap(
-                lambda s: self.integrate_simplex(s, coeffs, exponents)
-            )(simplices)
-            integral_polytope = (
-                torch.sum(integral_simplices, dim=0).to("cpu").unsqueeze(-1)
-            )
+            if coeffs is not None:
+                coeffs = coeffs.to(self.device)
+                exponents = exponents.to(self.device)
+            # batch over simplices
+            results_per_batch = []
+            if self.batch_size is not None:
+                s_size = int(self.batch_size / 10)
+            else:
+                s_size = simplices.shape[0]
+            for i in range(0, simplices.shape[0], s_size):
+                simplices_batch = simplices[i:(i + s_size)]
+                integral_simplices = torch.vmap(
+                    lambda s: self.integrate_simplex(s, coeffs, exponents)
+                )(simplices_batch)
+                integral_simplices_batch = (
+                    torch.sum(integral_simplices, dim=0).to("cpu").unsqueeze(-1)
+                )
+                results_per_batch.append(integral_simplices_batch)
+
+            integral_polytope = torch.cat(results_per_batch, dim=-1).sum(dim=-1)
+                    
             match self.mode:
                 case FunctionMode(_):
                     results.append(integral_polytope.to("cpu").unsqueeze(-1))
